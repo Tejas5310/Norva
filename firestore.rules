@@ -1,0 +1,499 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED PRIMITIVES ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        ('email_verified' in request.auth.token &&
+         request.auth.token.email_verified == true &&
+         'email' in request.auth.token &&
+         request.auth.token.email == 'tejashpatel02010@gmail.com')
+      );
+    }
+
+    function isBoundedStringList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || arr[0] is string);
+    }
+
+    function isBoundedIntList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || arr[0] is int);
+    }
+
+    // --- VALIDATION HELPERS ---
+    function isValidPrivateUser(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 200 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+             data.preferredLanguage is string && data.preferredLanguage.size() >= 2 && data.preferredLanguage.size() <= 30 &&
+             data.themeMode in ['SYSTEM', 'DARK', 'LIGHT'] &&
+             data.feedDiversity is int && data.feedDiversity >= 0 && data.feedDiversity <= 100 &&
+             data.privateAccount is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSavedPost(data) {
+      return data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.previewText is string && data.previewText.size() <= 300 &&
+             data.mediaType in ['TEXT', 'PHOTO', 'SHORT_VIDEO', 'LONG_VIDEO', 'POLL'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidPublicProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.handle is string && data.handle.size() >= 2 && data.handle.size() <= 32 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+             data.bio is string && data.bio.size() <= 300 &&
+             data.avatarInitials is string && data.avatarInitials.size() >= 1 && data.avatarInitials.size() <= 4 &&
+             data.accentColorHex is string && data.accentColorHex.size() >= 4 && data.accentColorHex.size() <= 10 &&
+             isBoundedStringList(data.interests, 10) &&
+             data.creatorTier in ['STANDARD', 'CREATOR', 'VERIFIED_PRO'] &&
+             data.verifiedBadge is bool &&
+             data.discoverable is bool &&
+             data.subscriptionPriceUsd is number && data.subscriptionPriceUsd >= 0 && data.subscriptionPriceUsd <= 999 &&
+             data.followersCount is int && data.followersCount >= 0 &&
+             data.followingCount is int && data.followingCount >= 0 &&
+             data.tipsEarnedCents is int && data.tipsEarnedCents >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidFollow(data) {
+      return data.followerId is string && data.followerId.size() >= 1 && data.followerId.size() <= 128 &&
+             data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128 &&
+             data.followerId != data.targetUserId &&
+             data.targetDisplayName is string && data.targetDisplayName.size() >= 1 && data.targetDisplayName.size() <= 60 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidPost(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.authorHandle is string && data.authorHandle.size() >= 2 && data.authorHandle.size() <= 32 &&
+             data.authorVerified is bool &&
+             data.visibility in ['PUBLIC', 'COMMUNITY', 'SUBSCRIBERS'] &&
+             data.mediaType in ['TEXT', 'PHOTO', 'SHORT_VIDEO', 'LONG_VIDEO', 'POLL'] &&
+             data.content is string && data.content.size() >= 1 && data.content.size() <= 2000 &&
+             (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 1000)) &&
+             data.videoDurationSec is int && data.videoDurationSec >= 0 && data.videoDurationSec <= 36000 &&
+             (!('soundTrackTitle' in data) || (data.soundTrackTitle is string && data.soundTrackTitle.size() <= 120)) &&
+             (!('communityId' in data) || (data.communityId is string && data.communityId.size() <= 128)) &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+             isBoundedStringList(data.tags, 10) &&
+             isBoundedStringList(data.pollOptions, 4) &&
+             isBoundedIntList(data.pollVotes, 4) &&
+             (!('collaboratorHandle' in data) || (data.collaboratorHandle is string && data.collaboratorHandle.size() <= 32)) &&
+             data.aiGenerated is bool &&
+             data.likesCount is int && data.likesCount >= 0 &&
+             data.commentsCount is int && data.commentsCount >= 0 &&
+             data.repostsCount is int && data.repostsCount >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidLike(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidComment(data) {
+      return data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 128 &&
+             data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.authorHandle is string && data.authorHandle.size() >= 2 && data.authorHandle.size() <= 32 &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 500 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidStory(data) {
+      return data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.authorHandle is string && data.authorHandle.size() >= 2 && data.authorHandle.size() <= 32 &&
+             data.caption is string && data.caption.size() >= 1 && data.caption.size() <= 240 &&
+             data.moodTag is string && data.moodTag.size() >= 1 && data.moodTag.size() <= 30 &&
+             data.visibility in ['PUBLIC'] &&
+             data.livePulse is bool &&
+             data.gradientIndex is int && data.gradientIndex >= 0 && data.gradientIndex <= 5 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidCommunity(data) {
+      return data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 400 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 40 &&
+             data.visibility in ['PUBLIC', 'PRIVATE'] &&
+             isBoundedStringList(data.memberUids, 100) &&
+             data.membersCount is int && data.membersCount >= 1 &&
+             (!('activeRoomTopic' in data) || (data.activeRoomTopic is string && data.activeRoomTopic.size() <= 120)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDiscussion(data) {
+      return data.communityId is string && data.communityId.size() >= 1 && data.communityId.size() <= 128 &&
+             data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+             (!('pollQuestion' in data) || (data.pollQuestion is string && data.pollQuestion.size() <= 200)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidConversation(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+             data.groupChat is bool &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 20 && data.memberUids[0] is string &&
+             isBoundedStringList(data.memberNames, 20) &&
+             data.lastMessageText is string && data.lastMessageText.size() <= 300 &&
+             data.lastSenderId is string && data.lastSenderId.size() <= 128 &&
+             data.disappearingEnabled is bool &&
+             data.encryptedBadge is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.conversationId is string && data.conversationId.size() >= 1 && data.conversationId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+             (!('replyToText' in data) || (data.replyToText is string && data.replyToText.size() <= 300)) &&
+             isBoundedStringList(data.reactions, 20) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 20 && data.memberUids[0] is string &&
+             data.editedFlag is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidTip(data) {
+      return data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.recipientId is string && data.recipientId.size() >= 1 && data.recipientId.size() <= 128 &&
+             data.recipientName is string && data.recipientName.size() >= 1 && data.recipientName.size() <= 60 &&
+             data.giftType in ['SPARK', 'DIAMOND', 'CROWN', 'SUBSCRIPTION'] &&
+             data.amountCents is int && data.amountCents >= 100 && data.amountCents <= 100000 &&
+             data.creatorNetCents is int && data.creatorNetCents > 0 &&
+             data.platformFeeCents is int && data.platformFeeCents >= 0 &&
+             (data.creatorNetCents + data.platformFeeCents == data.amountCents) &&
+             data.note is string && data.note.size() <= 200 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidReport(data) {
+      return data.reporterId is string && data.reporterId.size() >= 1 && data.reporterId.size() <= 128 &&
+             data.targetType in ['POST', 'USER', 'COMMUNITY'] &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 300 &&
+             data.status in ['OPEN', 'RESOLVED', 'DISMISSED'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list, write: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isOwner(userId) && isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'email', 'displayName', 'preferredLanguage', 'themeMode', 'feedDiversity', 'privateAccount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'displayName', 'preferredLanguage', 'themeMode', 'feedDiversity', 'privateAccount', 'createdAt', 'updatedAt']) &&
+                       isValidPrivateUser(incoming());
+
+      allow update: if isOwner(userId) && isValidId(userId) &&
+                       isValidPrivateUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'preferredLanguage', 'themeMode', 'feedDiversity', 'privateAccount', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /savedPosts/{postId} {
+        allow get: if isOwner(userId) && isValidId(postId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(postId) &&
+                         incoming().keys().hasAll(['postId', 'authorName', 'previewText', 'mediaType', 'createdAt']) &&
+                         incoming().keys().hasOnly(['postId', 'authorName', 'previewText', 'mediaType', 'createdAt']) &&
+                         isValidSavedPost(incoming());
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(postId);
+      }
+    }
+
+    match /publicProfiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (existing().discoverable == true || request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (resource.data.discoverable == true || resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isOwner(userId) && isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().verifiedBadge == false &&
+                       incoming().followersCount == 0 &&
+                       incoming().followingCount == 0 &&
+                       incoming().tipsEarnedCents == 0 &&
+                       incoming().keys().hasAll(['userId', 'handle', 'displayName', 'bio', 'avatarInitials', 'accentColorHex', 'interests', 'creatorTier', 'verifiedBadge', 'discoverable', 'subscriptionPriceUsd', 'followersCount', 'followingCount', 'tipsEarnedCents', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'handle', 'displayName', 'bio', 'avatarInitials', 'accentColorHex', 'interests', 'creatorTier', 'verifiedBadge', 'discoverable', 'subscriptionPriceUsd', 'followersCount', 'followingCount', 'tipsEarnedCents', 'createdAt', 'updatedAt']) &&
+                       isValidPublicProfile(incoming());
+
+      allow update: if isSignedIn() && isValidId(userId) && isValidPublicProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (request.auth.uid == userId &&
+                          incoming().verifiedBadge == existing().verifiedBadge &&
+                          incoming().tipsEarnedCents == existing().tipsEarnedCents &&
+                          incoming().followersCount == existing().followersCount &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['handle', 'displayName', 'bio', 'avatarInitials', 'accentColorHex', 'interests', 'creatorTier', 'discoverable', 'subscriptionPriceUsd', 'followingCount', 'updatedAt'])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['followersCount', 'updatedAt']) &&
+                          incoming().followersCount - existing().followersCount <= 1 &&
+                          existing().followersCount - incoming().followersCount <= 1) ||
+                         (request.auth.uid != userId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['tipsEarnedCents', 'updatedAt']) &&
+                          incoming().tipsEarnedCents > existing().tipsEarnedCents &&
+                          incoming().tipsEarnedCents - existing().tipsEarnedCents <= 100000)
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /follows/{followId} {
+      allow get: if isSignedIn() && isValidId(followId) && (existing().followerId == request.auth.uid || existing().targetUserId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.followerId == request.auth.uid || resource.data.targetUserId == request.auth.uid);
+
+      allow create: if isSignedIn() && isValidId(followId) &&
+                       incoming().followerId == request.auth.uid &&
+                       followId == (request.auth.uid + '_' + incoming().targetUserId) &&
+                       incoming().keys().hasAll(['followerId', 'targetUserId', 'targetDisplayName', 'createdAt']) &&
+                       incoming().keys().hasOnly(['followerId', 'targetUserId', 'targetDisplayName', 'createdAt']) &&
+                       isValidFollow(incoming());
+
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(followId) && existing().followerId == request.auth.uid;
+    }
+
+    match /posts/{postId} {
+      allow get: if isSignedIn() && isValidId(postId) && (existing().visibility == 'PUBLIC' || existing().authorId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.visibility == 'PUBLIC' || resource.data.authorId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(postId) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().likesCount == 0 &&
+                       incoming().commentsCount == 0 &&
+                       incoming().repostsCount == 0 &&
+                       incoming().keys().hasAll(['authorId', 'authorName', 'authorHandle', 'authorVerified', 'visibility', 'mediaType', 'content', 'videoDurationSec', 'category', 'tags', 'pollOptions', 'pollVotes', 'aiGenerated', 'likesCount', 'commentsCount', 'repostsCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['authorId', 'authorName', 'authorHandle', 'authorVerified', 'visibility', 'mediaType', 'content', 'mediaUrl', 'videoDurationSec', 'soundTrackTitle', 'communityId', 'category', 'tags', 'pollOptions', 'pollVotes', 'collaboratorHandle', 'aiGenerated', 'likesCount', 'commentsCount', 'repostsCount', 'createdAt', 'updatedAt']) &&
+                       isValidPost(incoming());
+
+      allow update: if isSignedIn() && isValidId(postId) && isValidPost(incoming()) &&
+                       incoming().authorId == existing().authorId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (existing().authorId == request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['content', 'category', 'tags', 'visibility', 'updatedAt'])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt']) &&
+                          incoming().likesCount - existing().likesCount <= 1 &&
+                          existing().likesCount - incoming().likesCount <= 1) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['commentsCount', 'updatedAt']) &&
+                          incoming().commentsCount - existing().commentsCount == 1) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['repostsCount', 'updatedAt']) &&
+                          incoming().repostsCount - existing().repostsCount == 1) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['pollVotes', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(postId) && (existing().authorId == request.auth.uid || isAdmin());
+
+      match /likes/{likeUserId} {
+        allow get: if isSignedIn() && isValidId(postId) && isValidId(likeUserId) && request.auth.uid == likeUserId;
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(postId) && isValidId(likeUserId) &&
+                         request.auth.uid == likeUserId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'createdAt']) &&
+                         isValidLike(incoming());
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(postId) && isValidId(likeUserId) && request.auth.uid == likeUserId;
+      }
+
+      match /comments/{commentId} {
+        allow get: if isSignedIn() && isValidId(postId) && isValidId(commentId);
+        allow list: if isSignedIn() && resource.data.postId == postId;
+        allow create: if isSignedIn() && isValidId(postId) && isValidId(commentId) &&
+                         incoming().postId == postId &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().keys().hasAll(['postId', 'authorId', 'authorName', 'authorHandle', 'text', 'createdAt']) &&
+                         incoming().keys().hasOnly(['postId', 'authorId', 'authorName', 'authorHandle', 'text', 'createdAt']) &&
+                         isValidComment(incoming()) &&
+                         exists(/databases/$(database)/documents/posts/$(postId));
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(postId) && isValidId(commentId) && (existing().authorId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /stories/{storyId} {
+      allow get: if isSignedIn() && isValidId(storyId) && (existing().visibility == 'PUBLIC' || existing().authorId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.visibility == 'PUBLIC' || resource.data.authorId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(storyId) &&
+                       incoming().authorId == request.auth.uid &&
+                       incoming().keys().hasAll(['authorId', 'authorName', 'authorHandle', 'caption', 'moodTag', 'visibility', 'livePulse', 'gradientIndex', 'createdAt']) &&
+                       incoming().keys().hasOnly(['authorId', 'authorName', 'authorHandle', 'caption', 'moodTag', 'visibility', 'livePulse', 'gradientIndex', 'createdAt']) &&
+                       isValidStory(incoming());
+
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(storyId) && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    match /communities/{communityId} {
+      allow get: if isSignedIn() && isValidId(communityId) && (existing().visibility == 'PUBLIC' || request.auth.uid in existing().memberUids || existing().ownerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.visibility == 'PUBLIC' || request.auth.uid in resource.data.memberUids || resource.data.ownerId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(communityId) &&
+                       incoming().ownerId == request.auth.uid &&
+                       request.auth.uid in incoming().memberUids &&
+                       incoming().keys().hasAll(['ownerId', 'name', 'description', 'category', 'visibility', 'memberUids', 'membersCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['ownerId', 'name', 'description', 'category', 'visibility', 'memberUids', 'membersCount', 'activeRoomTopic', 'createdAt', 'updatedAt']) &&
+                       isValidCommunity(incoming());
+
+      allow update: if isSignedIn() && isValidId(communityId) && isValidCommunity(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isAdmin() ||
+                         (existing().ownerId == request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'category', 'visibility', 'activeRoomTopic', 'updatedAt'])) ||
+                         (existing().visibility == 'PUBLIC' &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'membersCount', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(communityId) && (existing().ownerId == request.auth.uid || isAdmin());
+
+      match /discussions/{discussionId} {
+        allow get: if isSignedIn() && isValidId(communityId) && isValidId(discussionId);
+        allow list: if isSignedIn() && resource.data.communityId == communityId;
+
+        allow create: if isSignedIn() && isValidId(communityId) && isValidId(discussionId) &&
+                         incoming().communityId == communityId &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().keys().hasAll(['communityId', 'authorId', 'authorName', 'title', 'body', 'createdAt']) &&
+                         incoming().keys().hasOnly(['communityId', 'authorId', 'authorName', 'title', 'body', 'pollQuestion', 'createdAt']) &&
+                         isValidDiscussion(incoming()) &&
+                         exists(/databases/$(database)/documents/communities/$(communityId));
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(communityId) && isValidId(discussionId) && (existing().authorId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && isValidId(conversationId) && (request.auth.uid in existing().memberUids);
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.memberUids);
+
+      allow create: if isSignedIn() && isValidId(conversationId) &&
+                       request.auth.uid in incoming().memberUids &&
+                       incoming().keys().hasAll(['title', 'groupChat', 'memberUids', 'memberNames', 'lastMessageText', 'lastSenderId', 'disappearingEnabled', 'encryptedBadge', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['title', 'groupChat', 'memberUids', 'memberNames', 'lastMessageText', 'lastSenderId', 'disappearingEnabled', 'encryptedBadge', 'createdAt', 'updatedAt']) &&
+                       isValidConversation(incoming());
+
+      allow update: if isSignedIn() && isValidId(conversationId) &&
+                       request.auth.uid in existing().memberUids &&
+                       isValidConversation(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['lastMessageText', 'lastSenderId', 'disappearingEnabled', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) && (request.auth.uid in existing().memberUids);
+        allow list: if isSignedIn() && (request.auth.uid in resource.data.memberUids);
+
+        allow create: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+                         incoming().conversationId == conversationId &&
+                         incoming().senderId == request.auth.uid &&
+                         request.auth.uid in incoming().memberUids &&
+                         incoming().keys().hasAll(['conversationId', 'senderId', 'senderName', 'text', 'reactions', 'memberUids', 'editedFlag', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['conversationId', 'senderId', 'senderName', 'text', 'replyToText', 'reactions', 'memberUids', 'editedFlag', 'createdAt', 'updatedAt']) &&
+                         isValidMessage(incoming());
+
+        allow update: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+                         request.auth.uid in existing().memberUids &&
+                         isValidMessage(incoming()) &&
+                         incoming().senderId == existing().senderId &&
+                         incoming().createdAt == existing().createdAt && (
+                           (existing().senderId == request.auth.uid &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['text', 'editedFlag', 'updatedAt'])) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['reactions', 'updatedAt'])
+                         );
+
+        allow delete: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) && existing().senderId == request.auth.uid;
+      }
+    }
+
+    match /tips/{tipId} {
+      allow get: if isSignedIn() && isValidId(tipId) && (existing().senderId == request.auth.uid || existing().recipientId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(tipId) &&
+                       incoming().senderId == request.auth.uid &&
+                       incoming().senderId != incoming().recipientId &&
+                       incoming().keys().hasAll(['senderId', 'senderName', 'recipientId', 'recipientName', 'giftType', 'amountCents', 'creatorNetCents', 'platformFeeCents', 'note', 'createdAt']) &&
+                       incoming().keys().hasOnly(['senderId', 'senderName', 'recipientId', 'recipientName', 'giftType', 'amountCents', 'creatorNetCents', 'platformFeeCents', 'note', 'createdAt']) &&
+                       isValidTip(incoming());
+
+      allow update, delete: if false;
+    }
+
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (existing().reporterId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.reporterId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(reportId) &&
+                       incoming().reporterId == request.auth.uid &&
+                       incoming().status == 'OPEN' &&
+                       incoming().keys().hasAll(['reporterId', 'targetType', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['reporterId', 'targetType', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt']) &&
+                       isValidReport(incoming());
+
+      allow update: if isAdmin() && isValidId(reportId) &&
+                       isValidReport(incoming()) &&
+                       incoming().reporterId == existing().reporterId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(reportId);
+    }
+  }
+}

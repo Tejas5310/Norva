@@ -1,0 +1,301 @@
+{
+  "entities": {
+    "PrivateUser": {
+      "title": "PrivateUser",
+      "description": "Private user account metadata, PII, and personal app preferences isolated from public discovery.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "email": { "type": "string", "description": "Verified account email address (PII)." },
+        "displayName": { "type": "string", "description": "Private account display name." },
+        "preferredLanguage": { "type": "string", "description": "Preferred language for AI translation." },
+        "themeMode": { "type": "string", "enum": ["SYSTEM", "DARK", "LIGHT"] },
+        "feedDiversity": { "type": "integer", "description": "User-controlled feed exploration weight 0-100." },
+        "privateAccount": { "type": "boolean", "description": "Privacy mode toggle." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "email", "displayName", "preferredLanguage", "themeMode", "feedDiversity", "privateAccount", "createdAt", "updatedAt"]
+    },
+    "SavedPost": {
+      "title": "SavedPost",
+      "description": "Bookmarked post reference stored in the user's private savedPosts subcollection.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "previewText": { "type": "string" },
+        "mediaType": { "type": "string", "enum": ["TEXT", "PHOTO", "SHORT_VIDEO", "LONG_VIDEO", "POLL"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "authorName", "previewText", "mediaType", "createdAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Public creator and social profile without PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "handle": { "type": "string" },
+        "displayName": { "type": "string" },
+        "bio": { "type": "string" },
+        "avatarInitials": { "type": "string" },
+        "accentColorHex": { "type": "string" },
+        "interests": { "type": "array" },
+        "creatorTier": { "type": "string", "enum": ["STANDARD", "CREATOR", "VERIFIED_PRO"] },
+        "verifiedBadge": { "type": "boolean" },
+        "discoverable": { "type": "boolean" },
+        "subscriptionPriceUsd": { "type": "number" },
+        "followersCount": { "type": "integer" },
+        "followingCount": { "type": "integer" },
+        "tipsEarnedCents": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "handle", "displayName", "bio", "avatarInitials", "accentColorHex", "interests", "creatorTier", "verifiedBadge", "discoverable", "subscriptionPriceUsd", "followersCount", "followingCount", "tipsEarnedCents", "createdAt", "updatedAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Directional follow relationship between two users.",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string" },
+        "targetUserId": { "type": "string" },
+        "targetDisplayName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerId", "targetUserId", "targetDisplayName", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Multi-format social feed post supporting text, photos, short/long videos, polls, and collaborations.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorHandle": { "type": "string" },
+        "authorVerified": { "type": "boolean" },
+        "visibility": { "type": "string", "enum": ["PUBLIC", "COMMUNITY", "SUBSCRIBERS"] },
+        "mediaType": { "type": "string", "enum": ["TEXT", "PHOTO", "SHORT_VIDEO", "LONG_VIDEO", "POLL"] },
+        "content": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "videoDurationSec": { "type": "integer" },
+        "soundTrackTitle": { "type": "string" },
+        "communityId": { "type": "string" },
+        "category": { "type": "string" },
+        "tags": { "type": "array" },
+        "pollOptions": { "type": "array" },
+        "pollVotes": { "type": "array" },
+        "collaboratorHandle": { "type": "string" },
+        "aiGenerated": { "type": "boolean" },
+        "likesCount": { "type": "integer" },
+        "commentsCount": { "type": "integer" },
+        "repostsCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "authorHandle", "authorVerified", "visibility", "mediaType", "content", "videoDurationSec", "category", "tags", "pollOptions", "pollVotes", "aiGenerated", "likesCount", "commentsCount", "repostsCount", "createdAt", "updatedAt"]
+    },
+    "PostLike": {
+      "title": "PostLike",
+      "description": "Per-user like record on a post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Comment on a social post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorHandle": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "authorId", "authorName", "authorHandle", "text", "createdAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "Ephemeral 24h story or live pulse card.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorHandle": { "type": "string" },
+        "caption": { "type": "string" },
+        "moodTag": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["PUBLIC"] },
+        "livePulse": { "type": "boolean" },
+        "gradientIndex": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "authorHandle", "caption", "moodTag", "visibility", "livePulse", "gradientIndex", "createdAt"]
+    },
+    "Community": {
+      "title": "Community",
+      "description": "Interest, educational, professional, or creator community group.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"] },
+        "memberUids": { "type": "array" },
+        "membersCount": { "type": "integer" },
+        "activeRoomTopic": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "description", "category", "visibility", "memberUids", "membersCount", "createdAt", "updatedAt"]
+    },
+    "CommunityDiscussion": {
+      "title": "CommunityDiscussion",
+      "description": "Discussion thread or event inside a community.",
+      "type": "object",
+      "properties": {
+        "communityId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "pollQuestion": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["communityId", "authorId", "authorName", "title", "body", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Direct or group chat conversation header.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "groupChat": { "type": "boolean" },
+        "memberUids": { "type": "array" },
+        "memberNames": { "type": "array" },
+        "lastMessageText": { "type": "string" },
+        "lastSenderId": { "type": "string" },
+        "disappearingEnabled": { "type": "boolean" },
+        "encryptedBadge": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "groupChat", "memberUids", "memberNames", "lastMessageText", "lastSenderId", "disappearingEnabled", "encryptedBadge", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message inside a conversation with denormalized memberUids.",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "replyToText": { "type": "string" },
+        "reactions": { "type": "array" },
+        "memberUids": { "type": "array" },
+        "editedFlag": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversationId", "senderId", "senderName", "text", "reactions", "memberUids", "editedFlag", "createdAt", "updatedAt"]
+    },
+    "CreatorTip": {
+      "title": "CreatorTip",
+      "description": "Transparent creator tip, gift, or subscription ledger entry (95% creator / 5% platform).",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "giftType": { "type": "string", "enum": ["SPARK", "DIAMOND", "CROWN", "SUBSCRIPTION"] },
+        "amountCents": { "type": "integer" },
+        "creatorNetCents": { "type": "integer" },
+        "platformFeeCents": { "type": "integer" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "recipientId", "recipientName", "giftType", "amountCents", "creatorNetCents", "platformFeeCents", "note", "createdAt"]
+    },
+    "ModerationReport": {
+      "title": "ModerationReport",
+      "description": "Safety report submitted by users and reviewed by platform admins.",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string" },
+        "targetType": { "type": "string", "enum": ["POST", "USER", "COMMUNITY"] },
+        "targetId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "RESOLVED", "DISMISSED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterId", "targetType", "targetId", "reason", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/PrivateUser" },
+      "description": "Private user account info and settings isolated by owner UID."
+    },
+    "/users/{userId}/savedPosts/{postId}": {
+      "schema": { "$ref": "#/entities/SavedPost" },
+      "description": "User's private bookmarked posts."
+    },
+    "/publicProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Publicly discoverable creator and user profiles without PII."
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/Follow" },
+      "description": "Directional follow relationships between users."
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Multi-format social feed posts."
+    },
+    "/posts/{postId}/likes/{likeUserId}": {
+      "schema": { "$ref": "#/entities/PostLike" },
+      "description": "Per-user like records on a post."
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/PostComment" },
+      "description": "Comments on a post."
+    },
+    "/stories/{storyId}": {
+      "schema": { "$ref": "#/entities/Story" },
+      "description": "Ephemeral 24h stories and live pulse updates."
+    },
+    "/communities/{communityId}": {
+      "schema": { "$ref": "#/entities/Community" },
+      "description": "Global interest, creator, and educational communities."
+    },
+    "/communities/{communityId}/discussions/{discussionId}": {
+      "schema": { "$ref": "#/entities/CommunityDiscussion" },
+      "description": "Community discussions and events."
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Direct and group messaging threads."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Individual messages inside conversations."
+    },
+    "/tips/{tipId}": {
+      "schema": { "$ref": "#/entities/CreatorTip" },
+      "description": "Creator economy tips, digital gifts, and subscriptions."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ModerationReport" },
+      "description": "User moderation reports for admin review."
+    }
+  }
+}
